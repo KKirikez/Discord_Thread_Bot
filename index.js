@@ -1,7 +1,8 @@
 const { token } = require('./config.json');
 const fs = require('node:fs');
 const path = require('node:path');
-const { Client, Collection, Events, GatewayIntentBits } = require('discord.js');
+const { Client, Collection, Events, GatewayIntentBits, ForumChannel } = require('discord.js');
+const { MessageChannel } = require('node:worker_threads');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 
@@ -9,54 +10,25 @@ client.once(Events.ClientReady, readyClient => {
 	console.log(`Ready! Logged in as ${readyClient.user.tag}`);
 });
 
-client.commands = new Collection();
+client.on('messageCreate', (message) => {
+    // Ignore bot messages
+    if (message.author.bot) return;
 
-const foldersPath = path.join(__dirname, 'commands');
-const commandFolders = fs.readdirSync(foldersPath);
+    //Ignore posts when searching for replies
+    if (message.channel.isThread()) {
+        if (message.id === message.channel.id) return;
+    }
 
-for (const folder of commandFolders) {
-	const commandsPath = path.join(foldersPath, folder);
-	const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
-	for (const file of commandFiles) {
-		const filePath = path.join(commandsPath, file);
-		const command = require(filePath);
-		// Set a new item in the Collection with the key as the command name and the value as the exported module
-		if ('data' in command && 'execute' in command) {
-			client.commands.set(command.data.name, command);
-		} else {
-			console.log(`[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`);
-		}
-	}
-}
-
-client.on(Events.InteractionCreate, async interaction => {
-	if (!interaction.isChatInputCommand()) return;
-
-	const command = interaction.client.commands.get(interaction.commandName);
-
-	if (!command) {
-		console.error(`No command matching ${interaction.commandName} was found.`);
-		return;
-	}
-
-	try {
-		await command.execute(interaction);
-	} catch (error) {
-		console.error(error);
-		if (interaction.replied || interaction.deferred) {
-			await interaction.followUp({ content: 'There was an error while executing this command!', ephemeral: true });
-		} else {
-			await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
-		}
-	}
+    // Only proceed if the message is in the "ideas" category
+    if (message.channel.parent?.name === "ideas") {
+        console.log(`Reply made by: ${message.author.globalName} (${message.author.username})`);
+    }
 });
 
-client.on('messageCreate', (message) => {
-    if (message.author.bot) return;
-    if(message.channel.name === ""){
-        
-    }
-    
-  });
+client.on('threadCreate', async (thread) => {
+    const threadCreator = await client.users.fetch(thread.ownerId);
+    console.log(`Thread made by: ${threadCreator.globalName} (${threadCreator.username})`);
+});
 
+// Logging in
 client.login(token);
