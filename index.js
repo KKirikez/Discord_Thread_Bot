@@ -1,8 +1,7 @@
 const { token } = require('./config.json');
 const fs = require('node:fs');
 const path = require('node:path');
-const { Client, Collection, Events, GatewayIntentBits, ForumChannel } = require('discord.js');
-const { MessageChannel } = require('node:worker_threads');
+const { Client, Events, GatewayIntentBits} = require('discord.js');
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 // Google integration
 const { google } = require('googleapis');
