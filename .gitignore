@@ -132,3 +132,4 @@ dist
 
 # Ignore config file containing API key
 config.json
+keys
