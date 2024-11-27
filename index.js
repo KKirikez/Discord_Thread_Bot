@@ -93,49 +93,59 @@ async function logReply(name, date){
     
 }
 
+async function batchWrite(dataArray){
+  const googleSheetClient = await _getGoogleSheetClient();
+  
+  let dataToBeInserted = []
+  dataArray.map( data =>
+    dataToBeInserted.push([data.time, data.type, data.name])
+  )
+  await _writeGoogleSheet(googleSheetClient, sheetId, tabName, range, dataToBeInserted);
+}
+
 async function fetchAllMessages() {
   const forum = client.channels.cache.get(channelID);
   console.log("Fetching and processing all old messages.")
   
   threads = forum.threads.cache;
   
-  userIDs = threads.map(thread => thread.ownerId)
-
-  const threadMakerNames = await Promise.all(
-    userIDs.map(async userID => {
-      const fetchedUser = await client.users.fetch(userID);
-      return `${fetchedUser.displayName} (${fetchedUser.username})`; 
-    })
+  const threadsInfo = (
+    await Promise.all(
+      threads.map(async thread => {
+        const fetchedUser = await client.users.fetch(thread.ownerId);
+        return {
+          name: `${fetchedUser.displayName} (${fetchedUser.username})`,
+          time: thread.createdAt.toISOString(), 
+          type: "Thread",
+        };
+      })
+    )
   );
   
-  const replyMakerNames = (
+  const repliesInfo = (
     await Promise.all(
       threads.map(async message =>
-        (await message.messages.fetch()).map(
-          reply => `${reply.author.displayName} (${reply.author.username})`
-        )
+        (await message.messages.fetch()).map(reply => ({
+          name: `${reply.author.displayName} (${reply.author.username})`,
+          time: reply.createdAt.toISOString(),
+          type: "Reply",
+        }))
       )
     )
   ).flat();
 
-  console.log("Thread creators:");
-  console.log(threadMakerNames);
-
-  console.log("Reply creators:")
-  console.log(replyMakerNames)
+  const allInfo = [...threadsInfo, ...repliesInfo].sort((a, b) => new Date(b.time) - new Date(a.time));
 
   console.log("All old threads and replies logged, pushing to sheet.")
 
-  threadMakerNames.map(name => logThread(name, "Backlog"));
-
-  replyMakerNames.map(name => logReply(name, "Backlog"));
+  batchWrite(allInfo);
 
   console.log("Logged to sheet, scanning for new messages now.")
 
 }
   
 async function _writeGoogleSheet(googleSheetClient, sheetId, tabName, range, data) {
-    await googleSheetClient.spreadsheets.values.append({
+  await googleSheetClient.spreadsheets.values.append({
       spreadsheetId: sheetId,
       range: `${tabName}!${range}`,
       valueInputOption: 'USER_ENTERED',
