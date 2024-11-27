@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test needed :)\" && exit 1",
+    "prd": "node index.js",
+    "dev": "NODE_ENV=development CONFIG_PATH=./config/dev.json TOKEN_PATH=./tokens/dev_token.json node index.js"
   },
   "author": "kkirikez",
   "license": "ISC",
@@ -12,6 +14,6 @@
     "discord.js": "^14.16.3",
     "dotenv": "^16.4.5",
     "fs": "^0.0.1-security",
-    "googleapis": "^144.0.0"
+    "googleapis": "^95.0.0"
   }
 }

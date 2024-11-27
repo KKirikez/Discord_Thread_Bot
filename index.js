@@ -1,11 +1,12 @@
 const { token } = require('./config.json');
+const { channelID } = require('./config.json');
 const fs = require('node:fs');
 const path = require('node:path');
 const { Client, Events, GatewayIntentBits} = require('discord.js');
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 // Google integration
 const { google } = require('googleapis');
-const serviceAccountKeyFile = "./keys/launchpad-idea-tracking-ae5146ca08d7.json";
+const serviceAccountKeyFile = "./keys/launchpad-idea-tracking-d88b60ead8dc.json";
 const sheetId = '1cRY2_8tpMZt73O2FFWe3x6J2HRZ1bGnTR48EPzn-uxg';
 const tabName = 'Idea Logs';
 const range = 'A:C';
@@ -24,6 +25,9 @@ async function _getGoogleSheetClient() {
 
 client.once(Events.ClientReady, readyClient => {
 	console.log(`Ready! Logged in as ${readyClient.user.tag}`);
+  console.log("Wiping old sheet before reading backlog")
+  _resetDataGoogleSheet(sheetId, tabName);
+  fetchAllMessages();
 });
 
 client.on('messageCreate', (message) => {
@@ -35,18 +39,18 @@ client.on('messageCreate', (message) => {
         if (message.id === message.channel.id) return;
     }
 
-    // Only proceed if the message is in the "ideas" category
+    // Only proceed if the message is in the "ideas" channel
     if (message.channel.parent?.name === "ideas") {
-        console.log(`Reply made by: ${message.author.globalName} (${message.author.username})`);
-        logReply(`${message.author.globalName} (${message.author.username})`, message.createdAt);
+        console.log(`Reply made by: ${message.author.displayName} (${message.author.username})`);
+        logReply(`${message.author.displayName} (${message.author.username})`, message.createdAt);
 
     }
 });
 
 client.on('threadCreate', async (thread) => {
     const threadCreator = await client.users.fetch(thread.ownerId);
-    console.log(`Thread made by: ${threadCreator.globalName} (${threadCreator.username})`);
-    logThread(`${threadCreator.globalName} (${threadCreator.username})`, thread.createdAt);
+    console.log(`Thread made by: ${threadCreator.displayName} (${threadCreator.username})`);
+    logThread(`${threadCreator.displayName} (${threadCreator.username})`, thread.createdAt);
     
 });
 
@@ -89,14 +93,46 @@ async function logReply(name, date){
     
 }
 
-async function _readGoogleSheet(googleSheetClient, sheetId, tabName, range) {
-    const res = await googleSheetClient.spreadsheets.values.get({
-      spreadsheetId: sheetId,
-      range: `${tabName}!${range}`,
-    });
+async function fetchAllMessages() {
+  const forum = client.channels.cache.get(channelID);
+  console.log("Fetching and processing all old messages.")
   
-    return res.data.values;
-  }
+  threads = forum.threads.cache;
+  
+  userIDs = threads.map(thread => thread.ownerId)
+
+  const threadMakerNames = await Promise.all(
+    userIDs.map(async userID => {
+      const fetchedUser = await client.users.fetch(userID);
+      return `${fetchedUser.displayName} (${fetchedUser.username})`; 
+    })
+  );
+  
+  const replyMakerNames = (
+    await Promise.all(
+      threads.map(async message =>
+        (await message.messages.fetch()).map(
+          reply => `${reply.author.displayName} (${reply.author.username})`
+        )
+      )
+    )
+  ).flat();
+
+  console.log("Thread creators:");
+  console.log(threadMakerNames);
+
+  console.log("Reply creators:")
+  console.log(replyMakerNames)
+
+  console.log("All old threads and replies logged, pushing to sheet.")
+
+  threadMakerNames.map(name => logThread(name, "Backlog"));
+
+  replyMakerNames.map(name => logReply(name, "Backlog"));
+
+  console.log("Logged to sheet, scanning for new messages now.")
+
+}
   
 async function _writeGoogleSheet(googleSheetClient, sheetId, tabName, range, data) {
     await googleSheetClient.spreadsheets.values.append({
@@ -109,6 +145,14 @@ async function _writeGoogleSheet(googleSheetClient, sheetId, tabName, range, dat
         "values": data
       },
     })
+}
+
+async function _resetDataGoogleSheet(sheetId, tabName) {
+  const googleSheetClient = await _getGoogleSheetClient();
+  await googleSheetClient.spreadsheets.values.clear({
+    spreadsheetId: sheetId,
+    range: `${tabName}!A2:C`,
+  });
 }
 
 // Logging in
